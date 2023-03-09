@@ -75,10 +75,10 @@ evaluation_config:
         ensure_connectivity: False
 logger_config:
     wandb:
-        project: adv_paper
+        project: r255
         #project: vaegp_0920
         group: revised_gp
-        api_key_file: "./wandb_api_key_file"
+        api_key_file: "./wandb_api_key.txt"
 alternative_config:
     self_interested:
         # adversarial case in co-training
@@ -137,5 +137,5 @@ alternative_config:
                 graph_tabs: 3
         logger_config:
             wandb:
-                project: vaegp_0920
+                project: r255
 

@@ -1,2 +1,4 @@
 *.pyc
-
+*.DS_Store
+tmp
+wandb_api_key.txt

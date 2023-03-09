@@ -15,6 +15,7 @@ from ray.tune.registry import register_env
 from ray.tune.logger import pretty_print, DEFAULT_LOGGERS, TBXLogger
 from ray.rllib.utils.schedules import PiecewiseSchedule
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
+from ray.air.callbacks.wandb import WandbLoggerCallback
 
 from environments.coverage import CoverageEnv
 from environments.path_planning import PathPlanningEnv
@@ -106,6 +107,13 @@ def start_experiment():
     config.pop('alternative_config', None)
     config['callbacks'] = EvaluationCallbacks
 
+    callbacks=[WandbLoggerCallback(
+        project = config['logger_config']['wandb']['project'],
+        api_key_file = config['logger_config']['wandb']['api_key_file'],
+        # group = config['logger_config']['wandb']['group'],
+        log_config = True
+    )]
+
     initialize()        
     tune.run(
         MultiPPOTrainer,
@@ -113,7 +121,8 @@ def start_experiment():
         stop={"timesteps_total": args.timesteps*1e6},
         keep_checkpoints_num=1,
         config=config,
-        #local_dir="/tmp",
+        callbacks=callbacks,
+        local_dir="./tmp",
         trial_dirname_creator=trial_dirname_creator,
     )
 
@@ -140,6 +149,13 @@ def continue_experiment():
 
     config['callbacks'] = EvaluationCallbacks
 
+    callbacks=[WandbLoggerCallback(
+        project = config['logger_config']['wandb']['project'],
+        api_key_file = config['logger_config']['wandb']['api_key_file'],
+        # group = config['logger_config']['wandb']['group'],
+        log_config = True
+    )]
+
     checkpoint_file = Path(args.checkpoint) / ('checkpoint-' + os.path.basename(args.checkpoint).split('_')[-1])
 
     initialize()
@@ -150,7 +166,8 @@ def continue_experiment():
         restore=checkpoint_file,
         keep_checkpoints_num=1,
         config=config,
-        #local_dir="/tmp",
+        callbacks=callbacks,
+        local_dir="./tmp",
         trial_dirname_creator=trial_dirname_creator,
     )
 
