@@ -14,13 +14,14 @@ from ray.rllib.models import ModelCatalog
 from ray.tune.registry import register_env
 from ray.tune.logger import pretty_print, DEFAULT_LOGGERS, TBXLogger
 from ray.rllib.utils.schedules import PiecewiseSchedule
-from ray.rllib.agents.callbacks import DefaultCallbacks
+from ray.rllib.algorithms.callbacks import DefaultCallbacks
 
-from .environments.coverage import CoverageEnv
-from .environments.path_planning import PathPlanningEnv
-from .models.adversarial import AdversarialModel
-from .trainers.multiagent_ppo import MultiPPOTrainer
-from .trainers.hom_multi_action_dist import TorchHomogeneousMultiActionDistribution
+from environments.coverage import CoverageEnv
+from environments.path_planning import PathPlanningEnv
+from models.adversarial import AdversarialModel
+# from trainers.multiagent_ppo import MultiPPOTrainer
+from trainers.multi_trainer import MultiPPOTrainer
+from trainers.hom_multi_action_dist import TorchHomogeneousMultiActionDistribution
 
 torch, _ = try_import_torch()
 
@@ -95,7 +96,7 @@ def start_experiment():
         config_path = get_config_base() / (args.experiment + ".yaml")
 
     with open(config_path, "rb") as config_file:
-        config = yaml.load(config_file)
+        config = yaml.safe_load(config_file)
     if args.override is not None:
         if not args.override in config['alternative_config']:
             print("Invalid alternative config key! Choose one from:")

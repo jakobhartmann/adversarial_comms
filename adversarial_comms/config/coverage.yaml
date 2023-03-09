@@ -64,7 +64,8 @@ env_config:
     operation_mode: coop_only
 evaluation_num_workers: 1
 evaluation_interval: 1
-evaluation_num_episodes: 10
+evaluation_duration: 10
+evaluation_duration_unit: episodes
 evaluation_config:
     env_config:
         termination_no_new_coverage: -1
