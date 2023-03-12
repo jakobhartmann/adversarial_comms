@@ -17,12 +17,12 @@ from ray.rllib.utils.schedules import PiecewiseSchedule
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 from ray.air.callbacks.wandb import WandbLoggerCallback
 
-from environments.coverage import CoverageEnv
-from environments.path_planning import PathPlanningEnv
-from models.adversarial import AdversarialModel
+from .environments.coverage import CoverageEnv
+from .environments.path_planning import PathPlanningEnv
+from .models.adversarial import AdversarialModel
 # from trainers.multiagent_ppo import MultiPPOTrainer
-from trainers.multi_trainer import MultiPPOTrainer
-from trainers.hom_multi_action_dist import TorchHomogeneousMultiActionDistribution
+from .trainers.multi_trainer import MultiPPOTrainer
+from .trainers.hom_multi_action_dist import TorchHomogeneousMultiActionDistribution
 
 torch, _ = try_import_torch()
 
@@ -117,7 +117,7 @@ def start_experiment():
     initialize()        
     tune.run(
         MultiPPOTrainer,
-        checkpoint_freq=10,
+        checkpoint_freq=1,
         stop={"timesteps_total": args.timesteps*1e6},
         keep_checkpoints_num=1,
         config=config,
@@ -145,7 +145,7 @@ def continue_experiment():
             config_path = get_config_base() / (args.experiment + ".yaml")
             
         with open(config_path, "rb") as config_file:
-            update_dict(config, yaml.load(config_file)['alternative_config'][args.override])
+            update_dict(config, yaml.safe_load(config_file)['alternative_config'][args.override])
 
     config['callbacks'] = EvaluationCallbacks
 
@@ -156,12 +156,13 @@ def continue_experiment():
         log_config = True
     )]
 
-    checkpoint_file = Path(args.checkpoint) / ('checkpoint-' + os.path.basename(args.checkpoint).split('_')[-1])
+    # checkpoint_file = Path(args.checkpoint) / ('checkpoint-' + os.path.basename(args.checkpoint).split('_')[-1])
+    checkpoint_file = Path(args.checkpoint)
 
     initialize()
     tune.run(
         MultiPPOTrainer,
-        checkpoint_freq=20,
+        checkpoint_freq=1,
         stop={"timesteps_total": args.timesteps*1e6},
         restore=checkpoint_file,
         keep_checkpoints_num=1,
