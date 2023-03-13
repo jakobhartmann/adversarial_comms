@@ -18,8 +18,12 @@ from ray.util.multiprocessing import Pool
 from .environments.coverage import CoverageEnv
 from .environments.path_planning import PathPlanningEnv
 from .models.adversarial import AdversarialModel
-from .trainers.multiagent_ppo import MultiPPOTrainer
-from .trainers.random_heuristic import RandomHeuristicTrainer
+# from .trainers.multiagent_ppo import MultiPPOTrainer
+from .trainers.multi_trainer import MultiPPOTrainer
+# from .trainers.random_heuristic import RandomHeuristicTrainer
+
+from .trainers.hom_multi_action_dist import TorchHomogeneousMultiActionDistribution
+import imageio
 
 def update_dict(d, u):
     for k, v in u.items():
@@ -29,7 +33,7 @@ def update_dict(d, u):
             d[k] = v
     return d
 
-def run_trial(trainer_class=MultiPPOTrainer, checkpoint_path=None, trial=0, cfg_update={}, render=False):
+def run_trial(trainer_class=MultiPPOTrainer, checkpoint_path=None, trial=0, cfg_update={}, render=False, out_path=None):
     try:
         t0 = time.time()
         cfg = {'env_config': {}, 'model': {}}
@@ -57,7 +61,8 @@ def run_trial(trainer_class=MultiPPOTrainer, checkpoint_path=None, trial=0, cfg_
             }
         )
         if checkpoint_path is not None:
-            checkpoint_file = Path(checkpoint_path)/('checkpoint-'+os.path.basename(checkpoint_path).split('_')[-1])
+            # checkpoint_file = Path(checkpoint_path)/('checkpoint-'+os.path.basename(checkpoint_path).split('_')[-1])
+            checkpoint_file = Path(checkpoint_path)
             trainer.restore(str(checkpoint_file))
 
         envs = {'coverage': CoverageEnv, 'path_planning': PathPlanningEnv}
@@ -66,11 +71,15 @@ def run_trial(trainer_class=MultiPPOTrainer, checkpoint_path=None, trial=0, cfg_
         obs = env.reset()
 
         results = []
+        images = []
+
         for i in range(cfg['env_config']['max_episode_len']):
-            actions = trainer.compute_action(obs)
+            actions = trainer.compute_single_action(obs)
             obs, reward, done, info = env.step(actions)
             if render:
-                env.render()
+                figure = env.render()
+                image = np.frombuffer(figure.canvas.tostring_rgb(), dtype = 'uint8')
+                images.append(image.reshape(600, 600, 3))
             for j, reward in enumerate(list(info['rewards'].values())):
                 results.append({
                     'step': i,
@@ -80,6 +89,9 @@ def run_trial(trainer_class=MultiPPOTrainer, checkpoint_path=None, trial=0, cfg_
                 })
 
         print("Done", time.time() - t0)
+        if out_path != None:
+            image_file = path_to_hash(checkpoint_path) + '-' + str(trial) + '.gif'
+            imageio.mimsave(Path(out_path) / image_file, images[1:])
     except Exception as e:
         print(e, traceback.format_exc())
         raise
@@ -102,6 +114,7 @@ def initialize():
     register_env("coverage", lambda config: CoverageEnv(config))
     register_env("path_planning", lambda config: PathPlanningEnv(config))
     ModelCatalog.register_custom_model("adversarial", AdversarialModel)
+    ModelCatalog.register_custom_action_dist("hom_multi_action", TorchHomogeneousMultiActionDistribution)
 
 def eval_nocomm(env_config_func, prefix):
     parser = argparse.ArgumentParser()
@@ -186,8 +199,9 @@ def serve():
     parser = argparse.ArgumentParser()
     parser.add_argument("checkpoint")
     parser.add_argument("-s", "--seed", type=int, default=0)
+    parser.add_argument("-o", "--out_path", default=None)
     args = parser.parse_args()
 
     initialize()
-    run_trial(checkpoint_path=args.checkpoint, trial=args.seed, render=True)
+    run_trial(checkpoint_path=args.checkpoint, trial=args.seed, render=True, out_path=args.out_path)
 
