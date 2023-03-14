@@ -312,6 +312,12 @@ class PathPlanningEnv(gym.Env, EzPickle):
             pass
         elif self.cfg['reward_type'] == 'greedy_only':
             rewards[1] = {agent_key: sum(rewards[0].values()) for agent_key in rewards[1].keys()}
+        elif self.cfg['reward_type'] == "adversary_only":
+            # Source: coverage.py
+            all_negative = -sum([sum(team_rewards.values()) for team_rewards in rewards.values()])
+            rewards[0] = {agent_key: all_negative for agent_key in rewards[0].keys()}
+
+            rewards[1] = {agent_key: sum(rewards[0].values()) for agent_key in rewards[1].keys()}
         elif self.cfg['reward_type'] == 'coop_only':
             rewards[0] = {agent_key: sum(rewards[1].values()) for agent_key in rewards[0].keys()}
         else:

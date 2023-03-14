@@ -81,6 +81,18 @@ alternative_config:
         evaluation_config:
             env_config:
                 reward_type: local
+    adversarial:
+        env_config:
+            reward_type: adversary_only
+            disabled_teams_step: [False, False]
+            disabled_teams_comms: [False, False]
+        model:
+            custom_model_config:
+                freeze_coop: True
+                freeze_greedy: False
+        evaluation_config:
+            env_config:
+                reward_type: local
     re_adapt:
         env_config:
             reward_type: coop_only
