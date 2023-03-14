@@ -91,6 +91,15 @@ alternative_config:
             custom_model_config:
                 freeze_coop: True
                 freeze_greedy: False
+    adversarial:
+        env_config:
+            operation_mode: adversary_only
+            disabled_teams_step: [False, False]
+            disabled_teams_comms: [False, False]
+        model:
+            custom_model_config:
+                freeze_coop: True
+                freeze_greedy: False
     re_adapt:
         env_config:
             operation_mode: coop_only
