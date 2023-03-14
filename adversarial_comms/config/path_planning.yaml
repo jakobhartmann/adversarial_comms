@@ -57,10 +57,17 @@ env_config:
         relative_coord_frame: True
 evaluation_num_workers: 1
 evaluation_interval: 1
-evaluation_num_episodes: 10
+evaluation_duration: 10
+evaluation_duration_unit: episodes
 evaluation_config:
     env_config:
         reward_type: local
+logger_config:
+    wandb:
+        project: r255
+        #project: vaegp_0920
+        group: revised_gp
+        api_key_file: "./wandb_api_key.txt"
 alternative_config:
     self_interested:
         env_config:
