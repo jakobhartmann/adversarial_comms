@@ -155,36 +155,74 @@ def eval_nocomm_adv():
         'disabled_teams_step': [False, False] # both teams operating
     }, "eval_adv")
 
-def plot_agent(ax, df, color, step_aggregation='sum', linestyle='-'):
-    world_shape = df.attrs['env_config']['world_shape']
-    max_cov = world_shape[0]*world_shape[1]*df.attrs['env_config']['min_coverable_area_fraction']
-    d = (df.sort_values(['trial', 'step']).groupby(['trial', 'step'])['reward'].apply(step_aggregation, 'step').groupby('trial').cumsum()/max_cov*100).groupby('step')
+def plot_agent(ax, df, color, experiment, max_cov, step_aggregation='sum', linestyle='-'):
+    # world_shape = df.attrs['env_config']['world_shape']
+    # max_cov = world_shape[0]*world_shape[1]*df.attrs['env_config']['min_coverable_area_fraction']
+    
+    if (experiment == 'coverage') or (experiment == 'split_coverage'):
+        d = (df.sort_values(['trial', 'step']).groupby(['trial', 'step'])['reward'].apply(step_aggregation, 'step').groupby('trial').cumsum()/max_cov*100).groupby('step')
+    elif experiment == 'path_planning':
+        d = df.groupby(['step'])['reward']
+        # d = df.groupby(by = ['step', 'trial']).sum().groupby(by = ['step'])['reward']
+        # d = df.groupby(['step', 'trial']).sum()['reward'].groupby('step')
+    else:
+        raise NotImplementedError("Unknown experiment type", experiment)
+
     ax.plot(d.mean(), color=color, ls=linestyle)
     ax.fill_between(np.arange(len(d.mean())), np.clip(d.mean()-d.std(), 0, None), d.mean()+d.std(), alpha=0.1, color=color)
+    print('mean: ', np.round(d.mean().iloc[-1], 2))
+    print('std: ', np.round(d.std().iloc[-1], 2))
 
 def plot():
     parser = argparse.ArgumentParser()
     parser.add_argument("data")
     parser.add_argument("-o", "--out_file", default=None)
+    parser.add_argument("-e", "--experiment", default = None)
+    parser.add_argument("-a", "--aggregation", default = 'sum')
     args = parser.parse_args()
 
     fig_overview = plt.figure(figsize=[4, 4])
     ax = fig_overview.subplots(1, 1)
 
     df = pd.read_pickle(args.data)
-    if Path(args.data).name.startswith('eval_adv'):
-        plot_agent(ax, df[(df['comm'] == False) & (df['agent'] == 0)], 'r', step_aggregation='mean', linestyle=':')
-        plot_agent(ax, df[(df['comm'] == False) & (df['agent'] > 0)], 'b', step_aggregation='mean', linestyle=':')
-        plot_agent(ax, df[(df['comm'] == True) & (df['agent'] == 0)], 'r', step_aggregation='mean', linestyle='-')
-        plot_agent(ax, df[(df['comm'] == True) & (df['agent'] > 0)], 'b', step_aggregation='mean', linestyle='-')
-    elif Path(args.data).name.startswith('eval_coop'):
-        plot_agent(ax, df[(df['comm'] == False) & (df['agent'] > 0)], 'b', step_aggregation='sum', linestyle=':')
-        plot_agent(ax, df[(df['comm'] == True) & (df['agent'] > 0)], 'b', step_aggregation='sum', linestyle='-')
-    elif Path(args.data).name.startswith('eval_rand'):
-        plot_agent(ax, df[df['agent'] > 0], 'b', step_aggregation='sum', linestyle='-')
 
-    ax.set_ylabel("Coverage %")
-    ax.set_ylim(0, 100)
+    if args.experiment == "coverage":
+        aggr = args.aggregation
+        ax.set_ylabel("Coverage %")
+        ax.set_ylim(0, 100)
+        world_shape = df.attrs['env_config']['world_shape']
+        max_cov = world_shape[0] * world_shape[1] * df.attrs['env_config']['min_coverable_area_fraction']
+    elif args.experiment == "split_coverage":
+        aggr = args.aggregation
+        ax.set_ylabel("Coverage %")
+        ax.set_ylim(0, 100)
+        world_shape = df.attrs['env_config']['world_shape']
+        max_cov = world_shape[0] * world_shape[1] * (11 / 24)
+    elif args.experiment == "path_planning":
+        ax.set_ylabel("Probability for an agent to have reached its goal")
+        ax.set_ylim(0, 1)
+        max_cov = None
+        aggr = None
+    else:
+        raise NotImplementedError("Unknown experiment type", args.experiment)
+
+    if Path(args.data).name.startswith('eval_adv'):
+        print('Coop agent(s), w/ adv comm:')
+        plot_agent(ax, df[(df['comm'] == True) & (df['agent'] > 0)], 'b', args.experiment, max_cov, step_aggregation=aggr, linestyle='-')
+        print('Coop agent(s), w/o adv comm:')
+        plot_agent(ax, df[(df['comm'] == False) & (df['agent'] > 0)], 'b', args.experiment, max_cov, step_aggregation=aggr, linestyle=':')
+        print('Adv agent, w/ adv comm:')
+        plot_agent(ax, df[(df['comm'] == True) & (df['agent'] == 0)], 'r', args.experiment, max_cov, step_aggregation=aggr, linestyle='-')
+        print('Adv agent, w/o adv comm:')
+        plot_agent(ax, df[(df['comm'] == False) & (df['agent'] == 0)], 'r', args.experiment, max_cov, step_aggregation=aggr, linestyle=':')    
+    elif Path(args.data).name.startswith('eval_coop'):
+        print('Coop agent(s), w/ comm:')
+        plot_agent(ax, df[(df['comm'] == True) & (df['agent'] > 0)], 'b', args.experiment, max_cov, step_aggregation=aggr, linestyle='-')
+        print('Coop agent(s), w/o comm:')
+        plot_agent(ax, df[(df['comm'] == False) & (df['agent'] > 0)], 'b', args.experiment, max_cov, step_aggregation=aggr, linestyle=':')
+    elif Path(args.data).name.startswith('eval_rand'):
+        plot_agent(ax, df[df['agent'] > 0], 'b', args.experiment, max_cov, step_aggregation=aggr, linestyle='-')
+
     ax.set_xlabel("Episode time steps")
     ax.margins(x=0, y=0)
     ax.grid()
