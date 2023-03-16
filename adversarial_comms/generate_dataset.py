@@ -8,13 +8,20 @@ from ray.rllib.models import ModelCatalog
 from ray.tune.logger import NoopLogger
 #from model_team_adversarial import AdaptedVisionNetwork as AdversarialTeamModel
 #from model_team_adversarial_2 import AdaptedVisionNetwork as AdversarialTeamModel2
-from model_team_adversarial_2_vaegp import AdaptedVisionNetwork as AdversarialTeamModel2VAEGP
-from multiagent_ppo_trainer_2 import MultiPPOTrainer as MultiPPOTrainer2
+# from model_team_adversarial_2_vaegp import AdaptedVisionNetwork as AdversarialTeamModel2VAEGP
+# from multiagent_ppo_trainer_2 import MultiPPOTrainer as MultiPPOTrainer2
+from train_interpreter import Model, ModelV2
+from models.adversarial import AdversarialModel
+from trainers.multi_trainer import MultiPPOTrainer as MultiPPOTrainer2
+from trainers.hom_multi_action_dist import TorchHomogeneousMultiActionDistribution
+
 import matplotlib.style as mplstyle
 mplstyle.use('fast')
 
-from world_teams_2 import World as TeamWorld2
-from world_flow import WorldOverview as FlowWorld
+# from world_teams_2 import World as TeamWorld2
+# from world_flow import WorldOverview as FlowWorld
+from environments.coverage import CoverageEnv
+from environments.path_planning import PathPlanningEnv
 import pickle
 import torch
 
@@ -32,7 +39,7 @@ def generate(seed, checkpoint_path, sample_iterations, termination_mode, frame_t
     trainer_cfg = {
         "framework": "torch",
         "num_workers": 1,
-        "num_gpus": 1,
+        "num_gpus": 0,
         "env_config": checkpoint_config['env_config'],
         "model": checkpoint_config['model'],
         "seed": seed
@@ -43,12 +50,17 @@ def generate(seed, checkpoint_path, sample_iterations, termination_mode, frame_t
         env=checkpoint_config['env'],
         config=trainer_cfg
     )
-    checkpoint_file = checkpoint_path + '/checkpoint-' + os.path.basename(checkpoint_path).split('_')[-1]
+    # checkpoint_file = checkpoint_path + '/checkpoint-' + os.path.basename(checkpoint_path).split('_')[-1]
+    checkpoint_file = checkpoint_path
     trainer.restore(checkpoint_file)
 
+    # envs = {
+    #     'flowworld': FlowWorld,
+    #     'teamworld2': TeamWorld2
+    # }
     envs = {
-        'flowworld': FlowWorld,
-        'teamworld2': TeamWorld2
+        'coverage': CoverageEnv,
+        'path_planning': PathPlanningEnv
     }
     env = envs[checkpoint_config['env']](checkpoint_config['env_config'])
     env.seed(seed)
@@ -63,16 +75,16 @@ def generate(seed, checkpoint_path, sample_iterations, termination_mode, frame_t
     gnn_outputs = []
     def record_gnn_output(module, input_, output):
         gnn_outputs.append(output[0].detach().cpu().numpy())
-    #model.coop_convs[-1].register_forward_hook(record_cnn_output)
-    #model.greedy_convs[-1].register_forward_hook(record_cnn_output)
+    model.coop_convs[-1].register_forward_hook(record_cnn_output)
+    model.greedy_convs[-1].register_forward_hook(record_cnn_output)
     model.GFL.register_forward_hook(record_gnn_output)
 
     while len(samples) < sample_iterations:
-        actions = trainer.compute_action(obs)
-        for j in range(1, sum(checkpoint_config['env_config']['n_agents'])):
-            #obs['agents'][j]['cnn_out'] = cnn_outputs[j]
-            z, mu, log = model.coop_vaegp.vae.encode(torch.from_numpy(np.array([obs['agents'][j]['map']])).float().permute(0,3,1,2))
-            obs['agents'][j]['cnn_out'] = z[0].detach()
+        actions = trainer.compute_single_action(obs)
+        for j in range(0, sum(checkpoint_config['env_config']['n_agents'])):
+            obs['agents'][j]['cnn_out'] = cnn_outputs[j]
+            # z, mu, log = model.coop_vaegp.vae.encode(torch.from_numpy(np.array([obs['agents'][j]['map']])).float().permute(0,3,1,2))
+            # obs['agents'][j]['cnn_out'] = z[0].detach()
             obs['agents'][j]['gnn_out'] = gnn_outputs[0][..., j]
         cnn_outputs = []
         gnn_outputs = []
@@ -98,10 +110,16 @@ if __name__ == "__main__":
     ray.init()
     #ModelCatalog.register_custom_model("vis_torch_adv_team", AdversarialTeamModel)
     #ModelCatalog.register_custom_model("vis_torch_adv_team_2", AdversarialTeamModel2)
-    ModelCatalog.register_custom_model("vis_torch_adv_team_2_vaegp", AdversarialTeamModel2VAEGP)
+    # ModelCatalog.register_custom_model("vis_torch_adv_team_2_vaegp", AdversarialTeamModel2VAEGP)
+    ModelCatalog.register_custom_model("adversarial", AdversarialModel)
 
-    register_env("teamworld2", lambda config: TeamWorld2(config))
-    register_env("flowworld", lambda config: FlowWorld(config))
+    # register_env("teamworld2", lambda config: TeamWorld2(config))
+    # register_env("flowworld", lambda config: FlowWorld(config))
+
+    register_env('coverage', lambda config: CoverageEnv(config))
+    register_env('path_planning', lambda config: PathPlanningEnv(config))
+
+    ModelCatalog.register_custom_action_dist("hom_multi_action", TorchHomogeneousMultiActionDistribution)
 
     # cooperative trainings 
     #checkpoint_path = "/local/scratch/jb2270/corl_evaluation/MultiPPO/MultiPPO_teamworld2_0_2020-07-19_01-15-57_hu8xcpq/checkpoint_1560" # coverage
@@ -122,7 +140,10 @@ if __name__ == "__main__":
     #checkpoint_path = "/local/scratch/jb2270/vaegp_eval/MultiPPO/MultiPPO_teamworld2_0_2020-08-23_11-27-05u14jlcjb/checkpoint_1560" # simple
     
     #checkpoint_path = "/local/scratch/jb2270/vaegp_eval/MultiPPO/MultiPPO_teamworld2_0_2020-08-24_20-43-40mnea2uga/checkpoint_1560" # train with frozen VAE
-    checkpoint_path = "/local/scratch/jb2270/vaegp_eval/MultiPPO/MultiPPO_teamworld2_c8d29_00000/checkpoint_410"
+    # checkpoint_path = "/local/scratch/jb2270/vaegp_eval/MultiPPO/MultiPPO_teamworld2_c8d29_00000/checkpoint_410"
+
+    # checkpoint_path = '/Users/jakob/Desktop/R255 Experiments/Checkpoints/coverage_coop_5kk/MultiPPOTrainer_coverage_4a7f6_00000/checkpoint_000983'
+    checkpoint_path = '/Users/jakob/Desktop/R255 Experiments/Checkpoints/path_planning_coop_5kk/MultiPPOTrainer_path_planning_31518_00000/checkpoint_000817'
 
     termination_mode = "cov" # cov/path
     
@@ -130,8 +151,13 @@ if __name__ == "__main__":
     checkpoint_id = checkpoint_path.split("/")[-2].split("-")[-1]
     #generate(0, checkpoint_path, 1000, 0.1, 1.5)
     #exit()
-    run(0, checkpoint_path, 50000, 32, f"/local/scratch/jb2270/datasets_corl/explainability_data_{checkpoint_id}_{checkpoint_num}_train.pkl",termination_mode, disable_adv_comm=True)
-    run(1, checkpoint_path, 10000, 32, f"/local/scratch/jb2270/datasets_corl/explainability_data_{checkpoint_id}_{checkpoint_num}_valid.pkl", termination_mode, disable_adv_comm=True)
-    run(2, checkpoint_path, 1000, 1, f"/local/scratch/jb2270/datasets_corl/explainability_data_{checkpoint_id}_{checkpoint_num}_test.pkl", termination_mode, disable_adv_comm=True, frame_take_prob=1.0, t_fac=4)
+    # run(0, checkpoint_path, 50000, 32, f"/local/scratch/jb2270/datasets_corl/explainability_data_{checkpoint_id}_{checkpoint_num}_train.pkl",termination_mode, disable_adv_comm=True)
+    # run(1, checkpoint_path, 10000, 32, f"/local/scratch/jb2270/datasets_corl/explainability_data_{checkpoint_id}_{checkpoint_num}_valid.pkl", termination_mode, disable_adv_comm=True)
+    # run(2, checkpoint_path, 1000, 1, f"/local/scratch/jb2270/datasets_corl/explainability_data_{checkpoint_id}_{checkpoint_num}_test.pkl", termination_mode, disable_adv_comm=True, frame_take_prob=1.0, t_fac=4)
     #run(2, checkpoint_path, 1000, 1, f"/local/scratch/jb2270/datasets_corl/explainability_data_{checkpoint_id}_{checkpoint_num}_nocomm_test.pkl", termination_mode, disable_adv_comm=True, frame_take_prob=1.0)
 
+    dataset_path = '/Users/jakob/Desktop/R255/Workspace/adversarial_comms/datasets/'
+
+    run(0, checkpoint_path, 50000, 8, f"{dataset_path}{checkpoint_id}_{checkpoint_num}_train.pkl",termination_mode, disable_adv_comm=True)
+    run(1, checkpoint_path, 10000, 8, f"{dataset_path}{checkpoint_id}_{checkpoint_num}_valid.pkl", termination_mode, disable_adv_comm=True)
+    run(2, checkpoint_path, 1000, 1, f"{dataset_path}{checkpoint_id}_{checkpoint_num}_test.pkl", termination_mode, disable_adv_comm=True, frame_take_prob=1.0, t_fac=4)

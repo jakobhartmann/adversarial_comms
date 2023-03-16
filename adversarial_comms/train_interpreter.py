@@ -5,8 +5,8 @@ from ray.rllib.models.modelv2 import ModelV2
 from ray.rllib.utils.annotations import override
 from ray.rllib.utils import try_import_torch
 
-import utils.graphML as gml
-import utils.graphTools
+import models.gnn.graphML as gml
+import models.gnn.graphTools
 import numpy as np
 
 torch, nn = try_import_torch()
@@ -643,6 +643,10 @@ def thresholded_output_transform(output):
 def apply_weight_output_transform(x):
     y_pred_raw, y_raw = x[0], x[1] # shape each (batch size, agent, channel, x, y)
 
+    # if y_raw['y'].shape[-1] == 8 and y_pred_raw.shape[-1] == 24:
+    #     y_raw['y'] = F.pad(y_raw['y'], (8, 8, 8, 8), 'constant', 0)
+    #     y_raw['w'] = F.pad(y_raw['w'], (8, 8, 8, 8), 'constant', 0)
+
     classes = y_pred_raw.shape[2]
 
     w = y_raw['w'].permute([2, 0,1,3,4]).flatten()
@@ -655,6 +659,9 @@ def apply_weight_threshold_output_transform(x):
     return apply_weight_output_transform(thresholded_output_transform(x))
 
 def weighted_binary_cross_entropy(y_pred, y):
+    # if y['y'].shape[-1] == 8 and y_pred.shape[-1] == 24:
+    #     y['y'] = F.pad(y['y'], (8, 8, 8, 8), 'constant', 0)
+    #     y['w'] = F.pad(y['w'], (8, 8, 8, 8), 'constant', 0)
     return F.binary_cross_entropy(y_pred, y['y'], weight=y['w'])
 
 from ignite.metrics import EpochMetric
@@ -745,7 +752,7 @@ def train(train_data_path,
 
     tb_logger.attach(
         validation_evaluator,
-        log_handler=OutputHandler(tag="validation", metric_names=["ap"], another_engine=trainer),
+        log_handler=OutputHandler(tag="validation", metric_names=["ap"]), # , another_engine=trainer
         event_name=Events.EPOCH_COMPLETED,
     )
     #tb_logger.attach(trainer, log_handler=OptimizerParamsHandler(optimizer), event_name=Events.ITERATION_COMPLETED(every=100))
@@ -818,6 +825,37 @@ def analyse_dataset(path):
 
 if __name__ == "__main__":
     #train("explainability_data_k3_268ugnliyw_2735_train.pkl", "explainability_data_k3_268ugnliyw_2735_valid.pkl", "./explainability_k3_sgd", epochs=10000, batch_size=32, lr=0.1, sgd_momentum=0.9)
+    train(
+        train_data_path = "/Users/jakob/Desktop/R255/Workspace/adversarial_comms/datasets/MultiPPOTrainer_path_planning_31518_00000_000817_train.pkl", 
+        valid_data_path = "/Users/jakob/Desktop/R255/Workspace/adversarial_comms/datasets/MultiPPOTrainer_path_planning_31518_00000_000817_valid.pkl", 
+        config = {
+                'format': 'absolute', # absolute/relative
+                'nn_mode': 'cnn', # cnn/gnn/gnn_cnn
+                'pred_mode': 'local', # local (own coverage and map)/global (global coverage and map)
+                'prediction': 'cov_map', #cov_only/cov_map
+                'type': 'path' # path/cov
+            },
+        out_dir = "./explainability", 
+        batch_size = 32, 
+        lr = 0.1, 
+        epochs = 10000
+    )
+    # train(
+    #     train_data_path = "/Users/jakob/Desktop/R255/Workspace/adversarial_comms/datasets/MultiPPOTrainer_coverage_4a7f6_00000_000983_train.pkl", 
+    #     valid_data_path = "/Users/jakob/Desktop/R255/Workspace/adversarial_comms/datasets/MultiPPOTrainer_coverage_4a7f6_00000_000983_valid.pkl", 
+    #     config = {
+    #             'format': 'relative', # absolute/relative
+    #             'nn_mode': 'cnn', # cnn/gnn/gnn_cnn
+    #             'pred_mode': 'local', # local (own coverage and map)/global (global coverage and map)
+    #             'prediction': 'cov_map', #cov_only/cov_map
+    #             'type': 'cov', # path/cov
+    #             'skip_agents': 1
+    #         },
+    #     out_dir = "./explainability", 
+    #     batch_size = 32, 
+    #     lr = 0.1, 
+    #     epochs = 10000
+    # )
     if False:
         #dataset_id = "031g2r0u73_3070"
         #dataset_id = "096dwc6v_g_2990"
